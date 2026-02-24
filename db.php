@@ -1,13 +1,12 @@
 <?php
 $host = "localhost";
-$port = "5432";
+$user = "root";
+$pass = "";
 $db   = "bustrack";
-$user = "postgres";
-$pass = "1234";
 
-$conn = pg_connect("host=$host port=$port dbname=$db user=$user password=$pass");
+$conn = new mysqli($host, $user, $pass, $db);
 
-if(!$conn){
-    die("Database connection failed");
+if ($conn->connect_error) {
+    die("Database connection failed: " . $conn->connect_error);
 }
 ?>

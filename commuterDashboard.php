@@ -1,3 +1,15 @@
+<?php
+session_start();
+
+// 1. SECURITY CHECK: If user is not logged in, kick them back to the login page
+if (!isset($_SESSION['user_id'])) {
+    header("Location: Auth.php");
+    exit();
+}
+
+// 2. GET USER DATA: Use the session username for the greeting
+$userName = htmlspecialchars($_SESSION['username']);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,6 +75,13 @@
             gap: 15px;
         }
 
+        /* User Greeting Style */
+        .user-greeting {
+            color: var(--text-white);
+            margin-right: 15px;
+            font-size: 14px;
+        }
+
         /* Buttons */
         .btn-cancel {
             background: transparent;
@@ -94,7 +113,6 @@
             height: calc(100vh - 92px);
             position: relative;
             background: #111;
-            /* Grid simulation */
             background-image: linear-gradient(#222 1px, transparent 1px), 
                             linear-gradient(90deg, #222 1px, transparent 1px);
             background-size: 40px 40px;
@@ -110,7 +128,6 @@
             text-transform: uppercase;
         }
 
-        /* Recenter Button (North / Top-Right) */
         .recenter-btn {
             position: absolute;
             top: 20px;
@@ -139,6 +156,10 @@
     <header class="top-bar">
         <div class="booking-details">
             <div class="info-group">
+                <span class="label">User</span>
+                <span class="value"><?php echo $userName; ?></span>
+            </div>
+            <div class="info-group">
                 <span class="label">Bus #</span>
                 <span class="value">B-402</span>
             </div>
@@ -158,7 +179,7 @@
 
         <div class="actions">
             <button class="btn-cancel" onclick="confirmCancel()">CANCEL TICKET</button>
-            <div class="settings-icon" title="Settings">⚙</div>
+            <a href="logout.php" class="settings-icon" title="Logout">🚪</a>
         </div>
     </header>
 
@@ -174,7 +195,7 @@
         function confirmCancel() {
             if(confirm("Are you sure you want to cancel your bus booking?")) {
                 alert("Ticket Cancelled.");
-                // Add your PHP redirect or AJAX call here
+                // You can redirect to a specific cancel script here
             }
         }
     </script>
