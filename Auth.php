@@ -44,39 +44,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 
-    // ================= LOGIN LOGIC =================
-    if ($action === "login") {
-        $username = trim($_POST["username"]); 
-        $password = trim($_POST["password"]);
+// ================= LOGIN LOGIC =================
+if ($action === "login") {
+    $username = trim($_POST["username"]); 
+    $password = trim($_POST["password"]);
 
-        if (empty($username) || empty($password)) {
-            $message = "Enter username and password.";
-            $message_type = "error";
-        } else {
-            $stmt = $conn->prepare("SELECT id, username, password FROM users WHERE username=?");
-            $stmt->bind_param("s", $username);
-            $stmt->execute();
-            $result = $stmt->get_result();
+    if (empty($username) || empty($password)) {
+        $message = "Enter username and password.";
+        $message_type = "error";
+    } else {
+        $stmt = $conn->prepare("SELECT id, username, password FROM users WHERE username=?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-            if ($result->num_rows === 1) {
-                $user = $result->fetch_assoc();
+        if ($result->num_rows === 1) {
+            $user = $result->fetch_assoc();
 
-                if (password_verify($password, $user['password'])) {
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['username'] = $user['username'];
-                    header("Location: commuterDashboard.php");
-                    exit(); 
-                } else {
-                    $message = "Invalid password.";
-                    $message_type = "error";
-                }
+            if (password_verify($password, $user['password'])) {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                
+                //Redirect to dashboard.php instead of commuterDashboard.php
+                header("Location: dashboard.php");
+                exit(); 
+                
             } else {
-                $message = "Username not found.";
+                $message = "Invalid password.";
                 $message_type = "error";
             }
-            $stmt->close();
+        } else {
+            $message = "Username not found.";
+            $message_type = "error";
         }
+        $stmt->close();
     }
+}
 }
 ?>
 <!DOCTYPE html>
