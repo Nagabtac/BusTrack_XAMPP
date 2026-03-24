@@ -1,9 +1,19 @@
 <?php
+// Suppress any PHP warnings/notices that might interfere with JSON output
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// Start output buffering to catch any unexpected output
+ob_start();
+
 header('Content-Type: application/json');
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 function getDashboardStats() {
     global $conn;
+    
+    // Clear any previous output
+    ob_clean();
     
     // Get total buses
     $result = $conn->query("SELECT COUNT(*) as total FROM buses");
@@ -40,6 +50,7 @@ function getDashboardStats() {
             'activeBuses' => $activeBuses
         ]
     ]);
+    exit;
 }
 
 getDashboardStats();

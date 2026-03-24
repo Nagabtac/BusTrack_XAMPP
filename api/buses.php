@@ -1,6 +1,13 @@
 <?php
+// Suppress any PHP warnings/notices that might interfere with JSON output
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// Start output buffering to catch any unexpected output
+ob_start();
+
 header('Content-Type: application/json');
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -32,6 +39,10 @@ switch($method) {
 
 function getBuses() {
     global $conn;
+    
+    // Clear any previous output
+    ob_clean();
+    
     $sql = "SELECT b.*, 
                    d.driver_name,
                    r.route_name,
@@ -51,6 +62,7 @@ function getBuses() {
     }
     
     echo json_encode(['success' => true, 'data' => $buses]);
+    exit;
 }
 
 function getBus($id) {
@@ -111,25 +123,50 @@ function updateBus($id) {
 function deleteBus($id) {
     global $conn;
     
-    // First check if bus has route assignments
-    $stmt = $conn->prepare("SELECT COUNT(*) as assignment_count FROM bus_route_assignments WHERE bus_id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
+    // Check if force delete is requested
+    $forceDelete = isset($_GET['force']) && $_GET['force'] === 'true';
     
-    if($row['assignment_count'] > 0) {
-        echo json_encode(['success' => false, 'message' => 'Cannot delete bus with active route assignments. Please remove assignments first.']);
-        return;
+    if (!$forceDelete) {
+        // First check if bus has route assignments
+        $stmt = $conn->prepare("SELECT COUNT(*) as assignment_count FROM bus_route_assignments WHERE bus_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        if($row['assignment_count'] > 0) {
+            echo json_encode([
+                'success' => false, 
+                'message' => 'Bus has active route assignments. Delete anyway?',
+                'hasAssignments' => true,
+                'assignmentCount' => $row['assignment_count']
+            ]);
+            return;
+        }
     }
     
-    $stmt = $conn->prepare("DELETE FROM buses WHERE bus_id = ?");
-    $stmt->bind_param("i", $id);
+    // Start transaction
+    $conn->begin_transaction();
     
-    if($stmt->execute()) {
+    try {
+        // Delete all route assignments for this bus
+        $stmt = $conn->prepare("DELETE FROM bus_route_assignments WHERE bus_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        // Then delete the bus
+        $stmt = $conn->prepare("DELETE FROM buses WHERE bus_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        // Commit transaction
+        $conn->commit();
         echo json_encode(['success' => true, 'message' => 'Bus deleted successfully']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Error deleting bus: ' . $conn->error]);
+        
+    } catch (Exception $e) {
+        // Rollback transaction on error
+        $conn->rollback();
+        echo json_encode(['success' => false, 'message' => 'Error deleting bus: ' . $e->getMessage()]);
     }
 }
 ?>

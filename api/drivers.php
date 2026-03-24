@@ -1,6 +1,13 @@
 <?php
+// Suppress any PHP warnings/notices that might interfere with JSON output
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// Start output buffering to catch any unexpected output
+ob_start();
+
 header('Content-Type: application/json');
-require_once '../db.php';
+require_once __DIR__ . '/../db.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
@@ -32,6 +39,10 @@ switch($method) {
 
 function getDrivers() {
     global $conn;
+    
+    // Clear any previous output
+    ob_clean();
+    
     $sql = "SELECT d.*, COUNT(bra.assignment_id) as assigned_buses 
             FROM drivers d 
             LEFT JOIN bus_route_assignments bra ON d.driver_id = bra.driver_id 
@@ -45,6 +56,7 @@ function getDrivers() {
     }
     
     echo json_encode(['success' => true, 'data' => $drivers]);
+    exit;
 }
 
 function getDriver($id) {
@@ -102,25 +114,51 @@ function updateDriver($id) {
 
 function deleteDriver($id) {
     global $conn;
-    // First check if driver has assigned routes
-    $stmt = $conn->prepare("SELECT COUNT(*) as assignment_count FROM bus_route_assignments WHERE driver_id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
     
-    if($row['assignment_count'] > 0) {
-        echo json_encode(['success' => false, 'message' => 'Cannot delete driver with active route assignments. Please reassign routes first.']);
-        return;
+    // Check if force delete is requested
+    $forceDelete = isset($_GET['force']) && $_GET['force'] === 'true';
+    
+    if (!$forceDelete) {
+        // First check if driver has assigned routes
+        $stmt = $conn->prepare("SELECT COUNT(*) as assignment_count FROM bus_route_assignments WHERE driver_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        
+        if($row['assignment_count'] > 0) {
+            echo json_encode([
+                'success' => false, 
+                'message' => 'Driver has active route assignments. Delete anyway?',
+                'hasAssignments' => true,
+                'assignmentCount' => $row['assignment_count']
+            ]);
+            return;
+        }
     }
     
-    $stmt = $conn->prepare("DELETE FROM drivers WHERE driver_id = ?");
-    $stmt->bind_param("i", $id);
+    // Start transaction
+    $conn->begin_transaction();
     
-    if($stmt->execute()) {
+    try {
+        // Delete all route assignments for this driver
+        $stmt = $conn->prepare("DELETE FROM bus_route_assignments WHERE driver_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        // Then delete the driver
+        $stmt = $conn->prepare("DELETE FROM drivers WHERE driver_id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        
+        // Commit transaction
+        $conn->commit();
         echo json_encode(['success' => true, 'message' => 'Driver deleted successfully']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Error deleting driver: ' . $conn->error]);
+        
+    } catch (Exception $e) {
+        // Rollback transaction on error
+        $conn->rollback();
+        echo json_encode(['success' => false, 'message' => 'Error deleting driver: ' . $e->getMessage()]);
     }
 }
 ?>
